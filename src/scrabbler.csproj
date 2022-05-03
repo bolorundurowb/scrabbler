@@ -8,13 +8,14 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <None Update="words.txt">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </None>
+      <PackageReference Include="System.CommandLine" Version="2.0.0-beta3.22114.1" />
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="System.CommandLine" Version="2.0.0-beta3.22114.1" />
+      <None Remove="words.txt" />
+      <EmbeddedResource Include="words.txt">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </EmbeddedResource>
     </ItemGroup>
 
 </Project>
