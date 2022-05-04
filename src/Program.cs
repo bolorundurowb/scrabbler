@@ -27,13 +27,14 @@ public class Program
         rootCommand.Description =
             "A console application to help generate possible scrabble words given a list of tile values and constraints";
         rootCommand.SetHandler(
-            (string tiles, string? source, string? constraints) => { Process(tiles, source, constraints); });
+            (string tiles, string? source, string? constraints, IConsole console) => { Process(tiles, source, constraints, console); });
 
         return rootCommand.InvokeAsync(args);
     }
 
-    private static void Process(string tiles, string? source, string? constraints)
+    private static void Process(string tiles, string? source, string? constraints, IConsole console)
     {
+        console.Out.Write(tiles);
     }
 
     private static IEnumerable<string> GetWords(string? source)
