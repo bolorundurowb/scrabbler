@@ -1,6 +1,7 @@
 ﻿using System.CommandLine;
 using System.CommandLine.Invocation;
 using System.Reflection;
+using scrabbler.Models;
 
 namespace scrabbler;
 
@@ -53,4 +54,39 @@ public class Program
         var contents = sr.ReadToEnd();
         return contents.Split("\n");
     }
+
+    private static List<string> FindMatches(IEnumerable<char> tiles,
+        List<CharacterConstraint> constraints)
+    {
+        IEnumerable<string> matches = _words;
+        
+        // words shorter than the maximum constraints can be ignored
+        var maximumWordLength = constraints.MaxBy(x => x.Position)?.Position;
+
+        if (maximumWordLength.HasValue) 
+            matches = matches.Where(x => x.Length >= maximumWordLength);
+
+        foreach (var constraint in constraints)
+            matches =
+                matches.Where(x => x[constraint.Position - 1] == constraint.Character);
+
+        var tileFrequencyMap = GenerateCharFreqMap(tiles.Union(constraints.Select(x => x.Character)));
+
+        matches = matches.Where(x =>
+        {
+            var charFrequencyMap = GenerateCharFreqMap(x);
+            var charsExistInTiles = charFrequencyMap.Keys.All(y => tileFrequencyMap.ContainsKey(y));
+
+            if (!charsExistInTiles)
+                return false;
+
+            return charFrequencyMap.Keys.All(y => charFrequencyMap[y] <= tileFrequencyMap[y]);
+        });
+
+        return matches.ToList();
+    }
+
+    private static Dictionary<char, int> GenerateCharFreqMap(IEnumerable<char> input) =>
+        input.GroupBy(x => x)
+            .ToDictionary(x => x.Key, y => y.Count());
 }
