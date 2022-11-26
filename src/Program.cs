@@ -1,5 +1,4 @@
 ﻿using System.CommandLine;
-using System.CommandLine.IO;
 using System.Reflection;
 using scrabbler.Models;
 
@@ -7,6 +6,16 @@ namespace scrabbler;
 
 public class Program
 {
+    private static Dictionary<char, int> _characterPointMap = new Dictionary<char, int>()
+    {
+        { 'A', 1 }, { 'B', 1 }, { 'C', 1 }, { 'D', 1 }, { 'E', 1 },
+        { 'F', 1 }, { 'G', 1 }, { 'H', 1 }, { 'I', 1 }, { 'J', 1 },
+        { 'K', 1 }, { 'L', 1 }, { 'M', 1 }, { 'N', 1 }, { 'O', 1 },
+        { 'P', 1 }, { 'Q', 1 }, { 'R', 1 }, { 'S', 1 }, { 'T', 1 },
+        { 'U', 1 }, { 'V', 1 }, { 'W', 1 }, { 'X', 1 }, { 'Y', 1 },
+        { 'Z', 1 }
+    };
+        
     public static Task<int> Main(string[] args)
     {
         var sourceFileOption = new Option<string?>(new[] { "--source-file", "-S" },
@@ -122,4 +131,15 @@ public class Program
     private static Dictionary<char, int> GenerateCharFreqMap(IEnumerable<char> input) =>
         input.GroupBy(x => x)
             .ToDictionary(x => x.Key, y => y.Count());
+
+    private static int PointsForWord(string word)
+    {
+        var sum = 0;
+        word = word.ToUpperInvariant();
+
+        foreach (var character in word) 
+            sum += _characterPointMap[character];
+
+        return sum;
+    }
 }
