@@ -9,7 +9,8 @@ public class Program
 {
     public static Task<int> Main(string[] args)
     {
-        var sourceFileOption = new Option<string?>(new[] { "--source-file", "-S" }, description: "A file with the words to be searched. Defaults to the in-built list.");
+        var sourceFileOption = new Option<string?>(new[] { "--source-file", "-S" },
+            description: "A file with the words to be searched. Defaults to the in-built list.");
 
         var rootCommand = new RootCommand();
         rootCommand.AddGlobalOption(sourceFileOption);
@@ -17,36 +18,37 @@ public class Program
             "A console application to help with scrabble related computing.";
 
         var tilesArgument = new Argument<string>("tiles", description: "Your comma-separated tiles.");
-        var constraintsOption = new Option<string?>(new[] { "--constraints", "-C" }, description: "What target tiles you may want to incorporate.");
-        
+        var constraintsOption = new Option<string?>(new[] { "--constraints", "-C" },
+            description: "What target tiles you may want to incorporate.");
+
         var suggestCommand = new Command("suggest", "Suggest possible word combinations.");
         suggestCommand.AddArgument(tilesArgument);
         suggestCommand.AddOption(constraintsOption);
         rootCommand.AddCommand(suggestCommand);
-        
-        suggestCommand.SetHandler((string tiles, string? source, string? constraints, IConsole console) =>
-            Process(tiles, source, constraints, console));
+
+        suggestCommand.SetHandler((string tiles, string? source, string? constraints) =>
+            Process(tiles, source, constraints), tilesArgument, sourceFileOption, constraintsOption);
 
         return rootCommand.InvokeAsync(args);
     }
 
-    private static void Process(string tiles, string? source, string? constraints, IConsole console)
+    private static void Process(string tiles, string? source, string? constraints)
     {
         var words = GetWords(source).ToList();
 
         if (!words.Any())
         {
-            console.Out.WriteLine("No word list loaded. Cannot continue with matching.");
+            Console.WriteLine("No word list loaded. Cannot continue with matching.");
             return;
         }
 
         var parsedConstraints = ParseConstraints(constraints);
         var matches = FindMatches(words, tiles, parsedConstraints);
 
-        console.Out.WriteLine($"{matches.Count} match(es) found:");
+        Console.WriteLine($"{matches.Count} match(es) found:");
 
         foreach (var match in matches)
-            console.Out.WriteLine(match);
+            Console.WriteLine(match);
     }
 
     private static IEnumerable<string> GetWords(string? source)
@@ -58,7 +60,7 @@ public class Program
                 return File.ReadAllLines(source);
 
         var assembly = Assembly.GetExecutingAssembly();
-        using var stream = assembly.GetFile("words.txt");
+        using var stream = assembly.GetManifestResourceStream("scrabbler.words.txt");
 
         if (stream == null)
             return def;
