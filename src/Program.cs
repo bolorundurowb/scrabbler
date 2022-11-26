@@ -1,5 +1,5 @@
 ﻿using System.CommandLine;
-using System.CommandLine.Invocation;
+using System.CommandLine.IO;
 using System.Reflection;
 using scrabbler.Models;
 
@@ -7,34 +7,46 @@ namespace scrabbler;
 
 public class Program
 {
-    private static string[] _words;
-
     public static Task<int> Main(string[] args)
     {
-        var rootCommand = new RootCommand()
-        {
-            new Argument<string>("tiles", description: "Your tiles."),
-            new Option<string?>(new[]
-            {
-                "--source-file", "-S"
-            }, description: "A file with the words to be searched. Defaults to the in-built list."),
-            new Option<string?>(new[]
-            {
-                "--constraints", "-C"
-            }, description: "What target tiles you may want to incorporate."),
-        };
+        var sourceFileOption = new Option<string?>(new[] { "--source-file", "-S" }, description: "A file with the words to be searched. Defaults to the in-built list.");
 
+        var rootCommand = new RootCommand();
+        rootCommand.AddGlobalOption(sourceFileOption);
         rootCommand.Description =
-            "A console application to help generate possible scrabble words given a list of tile values and constraints";
-        rootCommand.SetHandler(
-            (string tiles, string? source, string? constraints, IConsole console) => { Process(tiles, source, constraints, console); });
+            "A console application to help with scrabble related computing.";
+
+        var tilesArgument = new Argument<string>("tiles", description: "Your comma-separated tiles.");
+        var constraintsOption = new Option<string?>(new[] { "--constraints", "-C" }, description: "What target tiles you may want to incorporate.");
+        
+        var suggestCommand = new Command("suggest", "Suggest possible word combinations.");
+        suggestCommand.AddArgument(tilesArgument);
+        suggestCommand.AddOption(constraintsOption);
+        rootCommand.AddCommand(suggestCommand);
+        
+        suggestCommand.SetHandler((string tiles, string? source, string? constraints, IConsole console) =>
+            Process(tiles, source, constraints, console));
 
         return rootCommand.InvokeAsync(args);
     }
 
     private static void Process(string tiles, string? source, string? constraints, IConsole console)
     {
-        console.Out.Write(tiles);
+        var words = GetWords(source).ToList();
+
+        if (!words.Any())
+        {
+            console.Out.WriteLine("No word list loaded. Cannot continue with matching.");
+            return;
+        }
+
+        var parsedConstraints = ParseConstraints(constraints);
+        var matches = FindMatches(words, tiles, parsedConstraints);
+
+        console.Out.WriteLine($"{matches.Count} match(es) found:");
+
+        foreach (var match in matches)
+            console.Out.WriteLine(match);
     }
 
     private static IEnumerable<string> GetWords(string? source)
@@ -56,20 +68,42 @@ public class Program
         return contents.Split("\n");
     }
 
-    private static List<string> FindMatches(IEnumerable<char> tiles,
+    private static List<CharacterConstraint> ParseConstraints(string? constraints)
+    {
+        var parsedConstraints = new List<CharacterConstraint>();
+
+        if (string.IsNullOrWhiteSpace(constraints))
+            return parsedConstraints;
+
+        var parts = constraints.Split(',');
+
+        // the constraints need to be in pairs
+        if (parts.Length % 2 != 0)
+            throw new ArgumentException("Invalid constraints. Constraints need to be in pairs.");
+
+        for (var i = 0; i < parts.Length; i += 2)
+        {
+            var character = parts[i].First();
+            var position = int.Parse(parts[i + 1]);
+            parsedConstraints.Add(new CharacterConstraint(character, position));
+        }
+
+        return parsedConstraints;
+    }
+
+    private static List<string> FindMatches(List<string> words, IEnumerable<char> tiles,
         List<CharacterConstraint> constraints)
     {
-        IEnumerable<string> matches = _words;
-        
+        IEnumerable<string> matches = words;
+
         // words shorter than the maximum constraints can be ignored
         var maximumWordLength = constraints.MaxBy(x => x.Position)?.Position;
 
-        if (maximumWordLength.HasValue) 
+        if (maximumWordLength.HasValue)
             matches = matches.Where(x => x.Length >= maximumWordLength);
 
         foreach (var constraint in constraints)
-            matches =
-                matches.Where(x => x[constraint.Position - 1] == constraint.Character);
+            matches = matches.Where(x => x[constraint.Position - 1] == constraint.Character);
 
         var tileFrequencyMap = GenerateCharFreqMap(tiles.Union(constraints.Select(x => x.Character)));
 
@@ -77,11 +111,7 @@ public class Program
         {
             var charFrequencyMap = GenerateCharFreqMap(x);
             var charsExistInTiles = charFrequencyMap.Keys.All(y => tileFrequencyMap.ContainsKey(y));
-
-            if (!charsExistInTiles)
-                return false;
-
-            return charFrequencyMap.Keys.All(y => charFrequencyMap[y] <= tileFrequencyMap[y]);
+            return charsExistInTiles && charFrequencyMap.Keys.All(y => charFrequencyMap[y] <= tileFrequencyMap[y]);
         });
 
         return matches.ToList();
