@@ -58,10 +58,25 @@ public class Program
         var parsedConstraints = ParseConstraints(constraints);
         var matches = FindMatches(words, tiles, parsedConstraints, maxLength);
 
-        Console.WriteLine($"{matches.Count} match(es) found:");
+        var consoleDefault = Console.ForegroundColor;
 
-        foreach (var match in matches)
-            Console.WriteLine(match);
+        if (!matches.Any())
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("No matches found for parameters given.");
+            return;
+        }
+
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine($"{matches.Count} match(es) found:");
+        foreach (var matchGroup in matches.Chunk(3))
+        {
+            foreach (var match in matchGroup)
+                Console.Write($"{match}     ");
+            Console.WriteLine();
+        }
+
+        Console.ForegroundColor = consoleDefault;
     }
 
     private static IEnumerable<string> GetWords(string? source)
@@ -80,7 +95,7 @@ public class Program
 
         using var sr = new StreamReader(stream);
         var contents = sr.ReadToEnd();
-        return contents.Split("\n");
+        return contents.Split("\n").Select(x => x.Trim());
     }
 
     private static List<CharacterConstraint> ParseConstraints(string? constraints)
@@ -106,8 +121,8 @@ public class Program
         return parsedConstraints;
     }
 
-    private static List<string> FindMatches(List<string> words, string tiles, List<CharacterConstraint> constraints,
-        int? maxLength)
+    private static List<string> FindMatches(IEnumerable<string> words, string tiles,
+        List<CharacterConstraint> constraints, int? maxLength)
     {
         IEnumerable<string> matches = words;
 
@@ -140,12 +155,21 @@ public class Program
         matches = matches.Where(x =>
         {
             var charFrequencyMap = GenerateCharFreqMap(x);
-            var charsExistInTiles = charFrequencyMap.Keys.All(y => tileFrequencyMap.ContainsKey(y));
-            var charFrequencyMatches = charFrequencyMap.Keys.All(y => charFrequencyMap[y] <= tileFrequencyMap[y]);
-            return charsExistInTiles && charFrequencyMatches;
+
+            foreach (var (character, freq) in charFrequencyMap)
+            {
+                if (tileFrequencyMap.ContainsKey(character) && freq <= tileFrequencyMap[character])
+                    continue;
+
+                return false;
+            }
+
+            return true;
         });
 
-        return matches.ToList();
+        return matches
+            .OrderByDescending(PointsForWord)
+            .ToList();
     }
 
     private static Dictionary<char, int> GenerateCharFreqMap(IEnumerable<char> input) =>
