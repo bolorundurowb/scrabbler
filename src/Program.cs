@@ -6,16 +6,16 @@ namespace scrabbler;
 
 public class Program
 {
-    private static Dictionary<char, int> _characterPointMap = new Dictionary<char, int>()
+    private static readonly Dictionary<char, int> CharacterPointMap = new()
     {
-        { 'A', 1 }, { 'B', 1 }, { 'C', 1 }, { 'D', 1 }, { 'E', 1 },
-        { 'F', 1 }, { 'G', 1 }, { 'H', 1 }, { 'I', 1 }, { 'J', 1 },
-        { 'K', 1 }, { 'L', 1 }, { 'M', 1 }, { 'N', 1 }, { 'O', 1 },
-        { 'P', 1 }, { 'Q', 1 }, { 'R', 1 }, { 'S', 1 }, { 'T', 1 },
-        { 'U', 1 }, { 'V', 1 }, { 'W', 1 }, { 'X', 1 }, { 'Y', 1 },
-        { 'Z', 1 }
+        { 'A', 1 }, { 'B', 3 }, { 'C', 3 }, { 'D', 2 }, { 'E', 1 },
+        { 'F', 4 }, { 'G', 2 }, { 'H', 4 }, { 'I', 1 }, { 'J', 1 },
+        { 'K', 5 }, { 'L', 1 }, { 'M', 3 }, { 'N', 1 }, { 'O', 1 },
+        { 'P', 3 }, { 'Q', 10 }, { 'R', 1 }, { 'S', 1 }, { 'T', 1 },
+        { 'U', 1 }, { 'V', 4 }, { 'W', 4 }, { 'X', 8 }, { 'Y', 4 },
+        { 'Z', 10 }
     };
-        
+
     public static Task<int> Main(string[] args)
     {
         var sourceFileOption = new Option<string?>(new[] { "--source-file", "-S" },
@@ -29,19 +29,23 @@ public class Program
         var tilesArgument = new Argument<string>("tiles", description: "Your comma-separated tiles.");
         var constraintsOption = new Option<string?>(new[] { "--constraints", "-C" },
             description: "What target tiles you may want to incorporate.");
+        var maxLengthOption = new Option<int?>(new[] { "--max-length", "-M" },
+            description: "The maximum length suggestions should be.");
 
         var suggestCommand = new Command("suggest", "Suggest possible word combinations.");
         suggestCommand.AddArgument(tilesArgument);
         suggestCommand.AddOption(constraintsOption);
+        suggestCommand.AddOption(maxLengthOption);
         rootCommand.AddCommand(suggestCommand);
 
-        suggestCommand.SetHandler((string tiles, string? source, string? constraints) =>
-            Process(tiles, source, constraints), tilesArgument, sourceFileOption, constraintsOption);
+        suggestCommand.SetHandler((string tiles, string? source, string? constraints, int? maxLength) =>
+                Process(tiles, source, constraints, maxLength), tilesArgument, sourceFileOption, constraintsOption,
+            maxLengthOption);
 
         return rootCommand.InvokeAsync(args);
     }
 
-    private static void Process(string tiles, string? source, string? constraints)
+    private static void Process(string tiles, string? source, string? constraints, int? maxLength)
     {
         var words = GetWords(source).ToList();
 
@@ -52,7 +56,7 @@ public class Program
         }
 
         var parsedConstraints = ParseConstraints(constraints);
-        var matches = FindMatches(words, tiles, parsedConstraints);
+        var matches = FindMatches(words, tiles, parsedConstraints, maxLength);
 
         Console.WriteLine($"{matches.Count} match(es) found:");
 
@@ -102,27 +106,43 @@ public class Program
         return parsedConstraints;
     }
 
-    private static List<string> FindMatches(List<string> words, IEnumerable<char> tiles,
-        List<CharacterConstraint> constraints)
+    private static List<string> FindMatches(List<string> words, string tiles, List<CharacterConstraint> constraints,
+        int? maxLength)
     {
         IEnumerable<string> matches = words;
 
-        // words shorter than the maximum constraints can be ignored
-        var maximumWordLength = constraints.MaxBy(x => x.Position)?.Position;
+        // maximum length that could possibly match
+        var length = maxLength ?? (tiles.Length + constraints.Count);
+        matches = matches.Where(x => x.Length <= length);
 
-        if (maximumWordLength.HasValue)
-            matches = matches.Where(x => x.Length >= maximumWordLength);
+        // limit to words that match constraints
+        matches = matches.Where(x =>
+        {
+            var constraintsThatApply = constraints.Where(y => y.Position < x.Length);
 
-        foreach (var constraint in constraints)
-            matches = matches.Where(x => x[constraint.Position - 1] == constraint.Character);
+            foreach (var (character, position) in constraintsThatApply)
+            {
+                if (x[position - 1] == character)
+                    continue;
 
-        var tileFrequencyMap = GenerateCharFreqMap(tiles.Union(constraints.Select(x => x.Character)));
+                return false;
+            }
+
+            return true;
+        });
+
+        var tileFrequencyMap = GenerateCharFreqMap(
+            tiles.Trim()
+                .Replace(",", string.Empty)
+                .Concat(constraints.Select(x => x.Character))
+        );
 
         matches = matches.Where(x =>
         {
             var charFrequencyMap = GenerateCharFreqMap(x);
             var charsExistInTiles = charFrequencyMap.Keys.All(y => tileFrequencyMap.ContainsKey(y));
-            return charsExistInTiles && charFrequencyMap.Keys.All(y => charFrequencyMap[y] <= tileFrequencyMap[y]);
+            var charFrequencyMatches = charFrequencyMap.Keys.All(y => charFrequencyMap[y] <= tileFrequencyMap[y]);
+            return charsExistInTiles && charFrequencyMatches;
         });
 
         return matches.ToList();
@@ -137,8 +157,8 @@ public class Program
         var sum = 0;
         word = word.ToUpperInvariant();
 
-        foreach (var character in word) 
-            sum += _characterPointMap[character];
+        foreach (var character in word)
+            sum += CharacterPointMap[character];
 
         return sum;
     }
